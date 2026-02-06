@@ -1,0 +1,19 @@
+[package]
+name = "nsynergy-net"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nsynergy-core = { workspace = true }
+tokio = { workspace = true }
+bincode = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+rustls = { workspace = true }
+tokio-rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,12 @@
+[package]
+name = "nsynergy-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nsynergy-core = { workspace = true }
+nsynergy-net = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
