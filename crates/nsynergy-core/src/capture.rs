@@ -158,6 +158,25 @@ fn convert_key(key: &rdev::Key) -> Key {
     Key { code }
 }
 
+/// Handle for the input capture system.
+///
+/// Dropping the handle signals the capture thread to stop
+/// (the channel closes and subsequent sends fail).
+pub struct CaptureHandle {
+    /// Receive captured events from this channel.
+    // Dropping the receiver causes the capture thread to detect
+    // channel closure on next send, effectively stopping capture.
+    pub event_rx: mpsc::UnboundedReceiver<TimestampedEvent>,
+}
+
+impl CaptureHandle {
+    /// Consumes the handle and returns the event receiver.
+    /// Useful for passing directly to `start_server`.
+    pub fn into_receiver(self) -> mpsc::UnboundedReceiver<TimestampedEvent> {
+        self.event_rx
+    }
+}
+
 /// Starts a global input listener on a background thread and sends
 /// converted events to the returned channel.
 ///
@@ -165,7 +184,7 @@ fn convert_key(key: &rdev::Key) -> Key {
 /// Events are bridged to tokio via an `mpsc::unbounded_channel`.
 ///
 /// **Requires Accessibility permissions on macOS.**
-pub fn start_capture() -> Result<mpsc::UnboundedReceiver<TimestampedEvent>> {
+pub fn start_capture() -> Result<CaptureHandle> {
     let (tx, rx) = mpsc::unbounded_channel();
     let epoch = Instant::now();
 
@@ -190,7 +209,7 @@ pub fn start_capture() -> Result<mpsc::UnboundedReceiver<TimestampedEvent>> {
         })
         .context("spawning input capture thread")?;
 
-    Ok(rx)
+    Ok(CaptureHandle { event_rx: rx })
 }
 
 #[cfg(test)]
@@ -316,5 +335,41 @@ mod tests {
         assert_eq!(convert_key(&rdev::Key::Space).code, 0x21);
         assert_eq!(convert_key(&rdev::Key::Escape).code, 0x0A);
         assert_eq!(convert_key(&rdev::Key::Tab).code, 0x22);
+    }
+
+    #[test]
+    fn convert_key_intl_backslash() {
+        assert_eq!(convert_key(&rdev::Key::IntlBackslash).code, 0x7C);
+    }
+
+    #[test]
+    fn convert_key_function_keys() {
+        assert_eq!(convert_key(&rdev::Key::F1).code, 0x0B);
+        assert_eq!(convert_key(&rdev::Key::F12).code, 0x16);
+        assert_eq!(convert_key(&rdev::Key::Function).code, 0x7B);
+    }
+
+    #[test]
+    fn convert_key_modifiers() {
+        assert_eq!(convert_key(&rdev::Key::Alt).code, 0x01);
+        assert_eq!(convert_key(&rdev::Key::ControlLeft).code, 0x05);
+        assert_eq!(convert_key(&rdev::Key::ControlRight).code, 0x06);
+        assert_eq!(convert_key(&rdev::Key::ShiftLeft).code, 0x1F);
+        assert_eq!(convert_key(&rdev::Key::ShiftRight).code, 0x20);
+        assert_eq!(convert_key(&rdev::Key::MetaLeft).code, 0x19);
+        assert_eq!(convert_key(&rdev::Key::MetaRight).code, 0x1A);
+    }
+
+    #[test]
+    fn convert_key_numpad() {
+        assert_eq!(convert_key(&rdev::Key::Kp0).code, 0x70);
+        assert_eq!(convert_key(&rdev::Key::Kp9).code, 0x79);
+        assert_eq!(convert_key(&rdev::Key::KpReturn).code, 0x64);
+        assert_eq!(convert_key(&rdev::Key::KpPlus).code, 0x66);
+    }
+
+    #[test]
+    fn convert_key_unknown_preserves_code() {
+        assert_eq!(convert_key(&rdev::Key::Unknown(999)).code, 999);
     }
 }

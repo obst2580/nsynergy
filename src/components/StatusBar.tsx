@@ -4,24 +4,53 @@ interface StatusBarProps {
   role: "Server" | "Client";
   machineName: string;
   connected: boolean;
+  connectedCount: number;
+  totalCount: number;
   onToggleRole: () => void;
 }
 
-function StatusBar({ role, machineName, connected, onToggleRole }: StatusBarProps) {
+function StatusBar({
+  role,
+  machineName,
+  connected,
+  connectedCount,
+  totalCount,
+  onToggleRole,
+}: StatusBarProps) {
+  const networkLabel =
+    connectedCount > 0
+      ? `${connectedCount}/${totalCount} devices`
+      : totalCount > 0
+        ? `${totalCount} discovered`
+        : "No devices";
+
   return (
     <div style={styles.bar}>
       <div style={styles.left}>
-        <span style={styles.dot(connected)} />
-        <span style={styles.name}>{machineName}</span>
+        <div style={styles.statusGroup}>
+          <div
+            style={{
+              ...styles.dot,
+              background: connected ? "#4caf50" : "#666",
+              boxShadow: connected ? "0 0 6px #4caf50" : "none",
+            }}
+          />
+          <div>
+            <div style={styles.name}>{machineName}</div>
+            <div style={styles.networkLabel}>{networkLabel}</div>
+          </div>
+        </div>
       </div>
-      <button onClick={onToggleRole} style={styles.roleBtn}>
-        {role}
-      </button>
+      <div style={styles.right}>
+        <button onClick={onToggleRole} style={styles.roleBtn}>
+          {role}
+        </button>
+      </div>
     </div>
   );
 }
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   bar: {
     display: "flex",
     justifyContent: "space-between",
@@ -29,22 +58,38 @@ const styles = {
     padding: "12px 16px",
     background: "#16213e",
     borderBottom: "1px solid #333",
-  } as React.CSSProperties,
+  },
   left: {
     display: "flex",
     alignItems: "center",
     gap: "8px",
-  } as React.CSSProperties,
-  dot: (connected: boolean): React.CSSProperties => ({
-    width: 8,
-    height: 8,
+  },
+  statusGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  },
+  dot: {
+    width: 10,
+    height: 10,
     borderRadius: "50%",
-    background: connected ? "#4caf50" : "#666",
-  }),
+    flexShrink: 0,
+  },
   name: {
     fontSize: "14px",
     fontWeight: 600,
-  } as React.CSSProperties,
+    color: "#e0e0e0",
+  },
+  networkLabel: {
+    fontSize: "11px",
+    color: "#888",
+    marginTop: "1px",
+  },
+  right: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
   roleBtn: {
     padding: "4px 12px",
     borderRadius: "4px",
@@ -54,7 +99,7 @@ const styles = {
     cursor: "pointer",
     fontSize: "12px",
     fontWeight: 600,
-  } as React.CSSProperties,
+  },
 };
 
 export default StatusBar;

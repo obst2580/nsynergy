@@ -1,5 +1,6 @@
 use crate::event::{Button, InputEvent, Key};
 use anyhow::Result;
+#[allow(unused_imports)]
 use tracing::{debug, warn};
 
 /// Trait abstracting input injection so we can mock it in tests.
@@ -70,11 +71,13 @@ pub fn remap_coordinates(
 
 /// Enigo-based input injector for real OS-level input simulation.
 ///
-/// Only available when enigo is compiled in (all platforms).
+/// Only available on desktop platforms (enigo does not compile on Android).
+#[cfg(not(target_os = "android"))]
 pub struct EnigoInjector {
     enigo: enigo::Enigo,
 }
 
+#[cfg(not(target_os = "android"))]
 impl EnigoInjector {
     pub fn new() -> Result<Self> {
         let enigo = enigo::Enigo::new(&enigo::Settings::default())
@@ -83,6 +86,7 @@ impl EnigoInjector {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 impl InputInjector for EnigoInjector {
     fn move_mouse(&mut self, x: i32, y: i32) -> Result<()> {
         use enigo::{Coordinate, Mouse};
@@ -142,6 +146,7 @@ impl InputInjector for EnigoInjector {
 }
 
 /// Maps our Key code to an enigo Key.
+#[cfg(not(target_os = "android"))]
 fn key_to_enigo(key: Key) -> enigo::Key {
     match key.code {
         0x01 => enigo::Key::Alt,
@@ -378,5 +383,47 @@ mod tests {
         assert_eq!(key_to_enigo(Key { code: 0x1D }), enigo::Key::Return);
         assert_eq!(key_to_enigo(Key { code: 0x21 }), enigo::Key::Space);
         assert_eq!(key_to_enigo(Key { code: 0x0A }), enigo::Key::Escape);
+    }
+
+    #[test]
+    fn key_to_enigo_digits() {
+        assert_eq!(key_to_enigo(Key { code: 0x29 }), enigo::Key::Unicode('1'));
+        assert_eq!(key_to_enigo(Key { code: 0x32 }), enigo::Key::Unicode('0'));
+    }
+
+    #[test]
+    fn key_to_enigo_punctuation() {
+        assert_eq!(key_to_enigo(Key { code: 0x33 }), enigo::Key::Unicode('-'));
+        assert_eq!(key_to_enigo(Key { code: 0x34 }), enigo::Key::Unicode('='));
+        assert_eq!(key_to_enigo(Key { code: 0x5B }), enigo::Key::Unicode('['));
+        assert_eq!(key_to_enigo(Key { code: 0x5D }), enigo::Key::Unicode(']'));
+        assert_eq!(key_to_enigo(Key { code: 0x62 }), enigo::Key::Unicode('/'));
+    }
+
+    #[test]
+    fn key_to_enigo_modifiers() {
+        assert_eq!(key_to_enigo(Key { code: 0x01 }), enigo::Key::Alt);
+        assert_eq!(key_to_enigo(Key { code: 0x05 }), enigo::Key::Control);
+        assert_eq!(key_to_enigo(Key { code: 0x06 }), enigo::Key::Control);
+        assert_eq!(key_to_enigo(Key { code: 0x1F }), enigo::Key::Shift);
+        assert_eq!(key_to_enigo(Key { code: 0x19 }), enigo::Key::Meta);
+    }
+
+    #[test]
+    fn key_to_enigo_unknown_code_returns_question_mark() {
+        assert_eq!(key_to_enigo(Key { code: 0xFF }), enigo::Key::Unicode('?'));
+    }
+
+    #[test]
+    fn remap_corner_cases() {
+        // Origin point
+        let (x, y) = remap_coordinates((1920, 1080), (2560, 1440), (0.0, 0.0));
+        assert_eq!(x, 0);
+        assert_eq!(y, 0);
+
+        // Max corner
+        let (x, y) = remap_coordinates((1920, 1080), (2560, 1440), (1919.0, 1079.0));
+        assert!(x <= 2559);
+        assert!(y <= 1439);
     }
 }

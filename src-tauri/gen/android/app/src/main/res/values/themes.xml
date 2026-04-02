@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Nsynergy" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#6750A4</item>
+        <item name="colorPrimaryVariant">#7F67BE</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+    </style>
+</resources>

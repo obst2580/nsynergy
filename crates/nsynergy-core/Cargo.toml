@@ -12,12 +12,15 @@ tracing = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 mdns-sd = { workspace = true }
-rdev = { workspace = true }
-enigo = { workspace = true }
 arboard = { workspace = true }
 rcgen = { workspace = true }
 rustls-pemfile = { workspace = true }
 rand = { workspace = true }
+
+# Desktop-only dependencies (rdev/enigo do not compile on Android)
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rdev = { workspace = true }
+enigo = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

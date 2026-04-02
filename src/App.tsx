@@ -4,20 +4,7 @@ import StatusBar from "./components/StatusBar";
 import DeviceList from "./components/DeviceList";
 import ScreenLayout from "./components/ScreenLayout";
 import Settings from "./components/Settings";
-
-interface AppState {
-  role: "Server" | "Client";
-  machine_name: string;
-  connected: boolean;
-  devices: Device[];
-}
-
-interface Device {
-  name: string;
-  address: string;
-  position: string;
-  connected: boolean;
-}
+import type { AppState } from "./types";
 
 type Tab = "devices" | "layout" | "settings";
 
@@ -32,6 +19,8 @@ function App() {
 
   useEffect(() => {
     loadState();
+    const interval = setInterval(loadState, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   async function loadState() {
@@ -59,6 +48,8 @@ function App() {
         role={state.role}
         machineName={state.machine_name}
         connected={state.connected}
+        connectedCount={state.devices.filter((d) => d.connected).length}
+        totalCount={state.devices.length}
         onToggleRole={toggleRole}
       />
 

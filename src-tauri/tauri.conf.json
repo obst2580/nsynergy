@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicegui-org/nicegui/main/nicegui/static/tauri/schema.json",
+  "$schema": "https://schema.tauri.app/config/2",
   "productName": "nsynergy",
   "version": "0.1.0",
   "identifier": "com.nsynergy.app",
@@ -38,6 +38,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "android": {
+      "minSdkVersion": 26
+    }
   }
 }

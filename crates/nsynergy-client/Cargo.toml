@@ -6,7 +6,10 @@ edition.workspace = true
 [dependencies]
 nsynergy-core = { workspace = true }
 nsynergy-net = { workspace = true }
+nsynergy-server = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }
+bincode = { workspace = true }

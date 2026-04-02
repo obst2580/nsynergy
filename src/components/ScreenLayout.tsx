@@ -1,11 +1,5 @@
 import React from "react";
-
-interface Device {
-  name: string;
-  address: string;
-  position: string;
-  connected: boolean;
-}
+import type { Device } from "../types";
 
 interface ScreenLayoutProps {
   devices: Device[];
