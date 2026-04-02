@@ -67,9 +67,9 @@ impl Default for TouchConfig {
 /// Tracks the state of an ongoing touch gesture.
 #[derive(Debug, Clone)]
 struct TouchPoint {
-    /// Position when the finger first touched down.
-    start_x: f64,
-    start_y: f64,
+    /// Position when the finger first touched down (reserved for gesture recognition).
+    _start_x: f64,
+    _start_y: f64,
     /// Most recent position.
     last_x: f64,
     last_y: f64,
@@ -111,8 +111,8 @@ impl TouchMapper {
     /// `finger_id`: 0 = primary, 1 = secondary.
     pub fn touch_down(&mut self, finger_id: u8, x: f64, y: f64) -> Vec<InputEvent> {
         let point = TouchPoint {
-            start_x: x,
-            start_y: y,
+            _start_x: x,
+            _start_y: y,
             last_x: x,
             last_y: y,
             start_time: Instant::now(),

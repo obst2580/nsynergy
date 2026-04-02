@@ -92,11 +92,16 @@ pub fn permission_instructions(check: &PermissionCheck) -> Vec<String> {
 
     #[cfg(target_os = "windows")]
     {
-        let _ = check; // suppress unused warning
+        let _ = check;
         instructions.push(
             "Windows Firewall: Allow nsynergy through Windows Defender Firewall for private networks"
                 .to_string(),
         );
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = check;
     }
 
     instructions
