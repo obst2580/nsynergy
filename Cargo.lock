@@ -2263,7 +2263,11 @@ name = "nsynergy-tauri"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bincode",
+ "nsynergy-client",
  "nsynergy-core",
+ "nsynergy-net",
+ "nsynergy-server",
  "serde",
  "serde_json",
  "tauri",

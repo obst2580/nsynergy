@@ -25,3 +25,10 @@ export interface PermissionCheck {
 }
 
 export type ConnectionStatus = "disconnected" | "connecting" | "pairing" | "connected";
+
+export interface DiscoveredPeer {
+  name: string;
+  address: string;
+  tcp_port: number;
+  udp_port: number;
+}

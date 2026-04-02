@@ -27,8 +27,8 @@ function App() {
     try {
       const result = await invoke<AppState>("get_app_state");
       setState(result);
-    } catch (e) {
-      console.error("Failed to load state:", e);
+    } catch (_e) {
+      // state load failed silently; will retry on next interval
     }
   }
 
@@ -36,9 +36,9 @@ function App() {
     try {
       const newRole = state.role === "Server" ? "Client" : "Server";
       await invoke("set_role", { role: newRole });
-      setState({ ...state, role: newRole });
-    } catch (e) {
-      console.error("Failed to toggle role:", e);
+      await loadState();
+    } catch (_e) {
+      // role toggle failed; state remains unchanged
     }
   }
 

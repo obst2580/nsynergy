@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import type { Device, ConnectionStatus } from "../types";
+import { invoke } from "@tauri-apps/api/core";
+import type { Device, ConnectionStatus, DiscoveredPeer } from "../types";
 import PairingDialog from "./PairingDialog";
 
 interface DeviceListProps {
@@ -30,17 +31,23 @@ function DeviceList({ devices, onRefresh }: DeviceListProps) {
   async function handleConnect(device: Device) {
     setDeviceStatus(device.name, "connecting");
 
-    // Simulate connection attempt - in production this would call
-    // invoke("connect_device", { address: device.address })
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // After connection attempt, start pairing flow
-    setDeviceStatus(device.name, "pairing");
-    setPairingTarget({ device, mode: "join" });
+    try {
+      await invoke("connect_device", { address: device.address });
+      setDeviceStatus(device.name, "pairing");
+      setPairingTarget({ device, mode: "join" });
+    } catch (_e) {
+      setDeviceStatus(device.name, "disconnected");
+    }
   }
 
-  function handleDisconnect(device: Device) {
-    setDeviceStatus(device.name, "disconnected");
+  async function handleDisconnect(device: Device) {
+    try {
+      await invoke("disconnect");
+      setDeviceStatus(device.name, "disconnected");
+      onRefresh();
+    } catch (_e) {
+      setDeviceStatus(device.name, "disconnected");
+    }
   }
 
   function handlePairDevice(device: Device) {
@@ -66,10 +73,15 @@ function DeviceList({ devices, onRefresh }: DeviceListProps) {
 
   async function handleScan() {
     setScanning(true);
-    onRefresh();
-    // Give the refresh a moment to show the scanning state
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setScanning(false);
+    try {
+      await invoke<DiscoveredPeer[]>("scan_network");
+      onRefresh();
+    } catch (_e) {
+      // scan_network may fail if runtime not initialized; fall back to config refresh
+      onRefresh();
+    } finally {
+      setScanning(false);
+    }
   }
 
   function renderStatusBadge(status: ConnectionStatus) {

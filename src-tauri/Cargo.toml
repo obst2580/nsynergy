@@ -21,6 +21,10 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 nsynergy-core = { workspace = true }
+nsynergy-server = { workspace = true }
+nsynergy-client = { workspace = true }
+nsynergy-net = { workspace = true }
+bincode = { workspace = true }
 
 [features]
 default = ["custom-protocol", "desktop"]

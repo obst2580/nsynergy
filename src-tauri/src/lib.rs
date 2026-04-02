@@ -1,4 +1,5 @@
 mod commands;
+pub mod runtime;
 
 #[cfg(desktop)]
 mod tray;
@@ -15,6 +16,7 @@ pub fn run() {
         .manage(AppState {
             config: Mutex::new(config),
             pairing_code: Mutex::new(None),
+            runtime: tokio::sync::Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_state,
@@ -26,6 +28,8 @@ pub fn run() {
             commands::generate_pairing_code,
             commands::verify_pairing,
             commands::connect_device,
+            commands::scan_network,
+            commands::disconnect,
             commands::mobile_touch_move,
             commands::mobile_tap,
             commands::mobile_scroll,

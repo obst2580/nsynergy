@@ -69,15 +69,21 @@ function PairingDialog({ mode, deviceName, onClose, onPaired }: PairingDialogPro
     setStatus("verifying");
     setErrorMessage("");
 
-    // Simulate verification delay - in production this would verify with the server
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    // For now, any valid 6-digit code succeeds
-    // In production, this would call invoke("verify_pairing", { code, deviceName })
-    setStatus("success");
-    setTimeout(() => {
-      onPaired();
-    }, 1000);
+    try {
+      const valid = await invoke<boolean>("verify_pairing", { code });
+      if (valid) {
+        setStatus("success");
+        setTimeout(() => {
+          onPaired();
+        }, 1000);
+      } else {
+        setStatus("error");
+        setErrorMessage("Invalid pairing code. Please try again.");
+      }
+    } catch (_e) {
+      setStatus("error");
+      setErrorMessage("Verification failed. Make sure a pairing code has been generated.");
+    }
   }
 
   function renderHostMode() {

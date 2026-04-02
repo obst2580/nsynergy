@@ -1,3 +1,4 @@
+use crate::runtime::{AppRuntime, DiscoveredPeer};
 use nsynergy_core::config::{AppConfig, Role, ScreenPosition};
 use nsynergy_core::permissions::{self, PermissionCheck};
 use nsynergy_core::security;
@@ -8,10 +9,13 @@ use tracing::info;
 use tauri::State;
 
 /// Shared application state managed by Tauri.
+///
+/// `config` and `pairing_code` use `std::sync::Mutex` (synchronous commands).
+/// `runtime` uses `tokio::sync::Mutex` because async commands hold it across awaits.
 pub struct AppState {
     pub config: Mutex<AppConfig>,
-    /// Active pairing code (set by generate_pairing_code, consumed by verify_pairing).
     pub pairing_code: Mutex<Option<String>>,
+    pub runtime: tokio::sync::Mutex<Option<AppRuntime>>,
 }
 
 /// JSON-friendly device info returned to the frontend.
@@ -64,19 +68,47 @@ pub fn get_app_state(state: State<'_, AppState>) -> Result<AppStateResponse, Str
         .lock()
         .map_err(|e| format!("lock error: {e}"))?;
 
-    let devices: Vec<DeviceInfo> = config
-        .neighbors
-        .iter()
-        .map(|n| DeviceInfo {
-            name: n.name.clone(),
-            address: n
-                .address
-                .map(|a| a.to_string())
-                .unwrap_or_else(|| "discovered".to_string()),
-            position: position_to_string(n.position),
-            connected: false,
-        })
-        .collect();
+    let mut rt = state
+        .runtime
+        .try_lock()
+        .map_err(|_| "runtime busy".to_string())?;
+
+    // Poll for status updates from backend services
+    let (is_connected, runtime_devices) = if let Some(ref mut runtime) = *rt {
+        runtime.poll_server_status();
+        runtime.poll_client_status();
+        let connected = runtime.is_connected();
+        let devices: Vec<DeviceInfo> = runtime
+            .connected_devices()
+            .iter()
+            .map(|d| DeviceInfo {
+                name: d.name.clone(),
+                address: d.address.clone(),
+                position: "Right".to_string(),
+                connected: true,
+            })
+            .collect();
+        (connected, devices)
+    } else {
+        (false, Vec::new())
+    };
+
+    // Merge config neighbors with runtime devices
+    let mut devices = runtime_devices;
+    for n in &config.neighbors {
+        let already_listed = devices.iter().any(|d| d.name == n.name);
+        if !already_listed {
+            devices.push(DeviceInfo {
+                name: n.name.clone(),
+                address: n
+                    .address
+                    .map(|a| a.to_string())
+                    .unwrap_or_else(|| "discovered".to_string()),
+                position: position_to_string(n.position),
+                connected: false,
+            });
+        }
+    }
 
     let role = match config.role {
         Role::Server => "Server",
@@ -86,22 +118,39 @@ pub fn get_app_state(state: State<'_, AppState>) -> Result<AppStateResponse, Str
     Ok(AppStateResponse {
         role: role.to_string(),
         machine_name: config.machine_name.clone(),
-        connected: false,
+        connected: is_connected,
         devices,
     })
 }
 
 #[tauri::command]
-pub fn set_role(state: State<'_, AppState>, role: String) -> Result<(), String> {
-    let mut config = state
-        .config
-        .lock()
-        .map_err(|e| format!("lock error: {e}"))?;
+pub async fn set_role(state: State<'_, AppState>, role: String) -> Result<(), String> {
+    let config = {
+        let mut cfg = state
+            .config
+            .lock()
+            .map_err(|e| format!("lock error: {e}"))?;
+        cfg.role = string_to_role(&role);
+        let path = AppConfig::default_path();
+        cfg.save(&path).map_err(|e| format!("save error: {e}"))?;
+        cfg.clone()
+    };
 
-    config.role = string_to_role(&role);
+    let mut rt = state.runtime.lock().await;
+    let runtime = rt.get_or_insert_with(AppRuntime::new);
 
-    let path = AppConfig::default_path();
-    config.save(&path).map_err(|e| format!("save error: {e}"))?;
+    match config.role {
+        Role::Server => {
+            runtime
+                .start_as_server(&config)
+                .await
+                .map_err(|e| format!("failed to start server: {e}"))?;
+        }
+        Role::Client => {
+            // When switching to client mode, stop the server
+            runtime.stop().await;
+        }
+    }
 
     Ok(())
 }
@@ -174,33 +223,62 @@ pub fn verify_pairing(state: State<'_, AppState>, code: String) -> Result<bool, 
 }
 
 #[tauri::command]
-pub fn connect_device(
+pub async fn connect_device(
     state: State<'_, AppState>,
     address: String,
 ) -> Result<(), String> {
-    // Parse the address as ip:port or just ip (defaulting to tcp_port from config)
-    let config = state
-        .config
-        .lock()
-        .map_err(|e| format!("lock error: {e}"))?;
+    let (config, addr) = {
+        let config = state
+            .config
+            .lock()
+            .map_err(|e| format!("lock error: {e}"))?;
 
-    let addr: std::net::SocketAddr = if address.contains(':') {
-        address
-            .parse()
-            .map_err(|e| format!("invalid address '{address}': {e}"))?
-    } else {
-        let ip: std::net::IpAddr = address
-            .parse()
-            .map_err(|e| format!("invalid IP '{address}': {e}"))?;
-        std::net::SocketAddr::new(ip, config.tcp_port)
+        let addr: std::net::SocketAddr = if address.contains(':') {
+            address
+                .parse()
+                .map_err(|e| format!("invalid address '{address}': {e}"))?
+        } else {
+            let ip: std::net::IpAddr = address
+                .parse()
+                .map_err(|e| format!("invalid IP '{address}': {e}"))?;
+            std::net::SocketAddr::new(ip, config.tcp_port)
+        };
+
+        (config.clone(), addr)
     };
 
-    tracing::info!(%addr, "connect_device requested");
+    tracing::info!(%addr, "connect_device: starting client connection");
 
-    // TODO: Start the actual client connection in the background.
-    // This will be wired to nsynergy_client::client::start_client()
-    // once the Tauri runtime integration is complete.
-    // For now, validate the address and log the intent.
+    let mut rt = state.runtime.lock().await;
+    let runtime = rt.get_or_insert_with(AppRuntime::new);
+    runtime
+        .start_as_client(addr, &config)
+        .await
+        .map_err(|e| format!("failed to connect: {e}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn scan_network(state: State<'_, AppState>) -> Result<Vec<DiscoveredPeer>, String> {
+    let rt = state.runtime.lock().await;
+    let runtime = rt
+        .as_ref()
+        .ok_or_else(|| "runtime not initialized".to_string())?;
+
+    runtime
+        .scan_network()
+        .await
+        .map_err(|e| format!("scan failed: {e}"))
+}
+
+#[tauri::command]
+pub async fn disconnect(state: State<'_, AppState>) -> Result<(), String> {
+    let mut rt = state.runtime.lock().await;
+
+    if let Some(ref mut runtime) = *rt {
+        runtime.stop().await;
+    }
 
     Ok(())
 }
@@ -210,8 +288,6 @@ pub fn connect_device(
 // through the Rust platform bridge to a connected desktop.
 
 /// Send a touch-move event from the mobile touchpad UI.
-/// This arrives from React, crosses into Rust, and is forwarded
-/// to the connected desktop via the nsynergy network protocol.
 #[cfg(target_os = "android")]
 #[tauri::command]
 pub fn mobile_touch_move(x: f64, y: f64) {
@@ -240,7 +316,7 @@ pub fn mobile_key(code: u32, pressed: bool) {
 }
 
 // Desktop stubs: these commands are registered in the invoke_handler
-// but are no-ops on desktop. This avoids cfg-gating the handler list.
+// but are no-ops on desktop.
 #[cfg(not(target_os = "android"))]
 #[tauri::command]
 pub fn mobile_touch_move(_x: f64, _y: f64) {}
